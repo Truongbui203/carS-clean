@@ -128,7 +128,7 @@ const AddCarScreen = () => {
       setLocation(DEFAULT_LOCATION);
       setImage(null);
     } catch (error: any) {
-      Alert.alert('❌ Lỗi', error.message);
+      Alert.alert(' Lỗi', error.message);
     }
   };
 
@@ -213,7 +213,7 @@ const AddCarScreen = () => {
         </MapView>
 
         <Text style={styles.debugText}>
-          📍 Vị trí: {location.latitude}, {location.longitude}
+           Vị trí: {location.latitude}, {location.longitude}
         </Text>
 
         <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>

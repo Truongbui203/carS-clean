@@ -8,20 +8,29 @@ import { db } from '../../services/firebase';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, Feather } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
+import { useRequireAuth } from '../../hooks/useRequireAuth';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
+
+interface UserData {
+  fullName?: string;
+  photoURL?: string;
+  [key: string]: any;
+}
 
 export default function ProfileScreen({ navigation }: Props) {
   const auth = getAuth();
   const user = auth.currentUser;
   const isFocused = useIsFocused();
-
-  const [userData, setUserData] = useState<any>(null);
+  const checkAuth = useRequireAuth();
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!checkAuth()) return;
+
     const fetchUserData = async () => {
       if (!user) return;
       try {
@@ -30,16 +39,14 @@ export default function ProfileScreen({ navigation }: Props) {
         if (snap.exists()) {
           const data = snap.data();
           setUserData(data);
-          setImageUri(data?.photoURL || null);
+          setImageUri(data.photoURL || null);
         }
       } catch (err) {
         console.error('Error loading user data:', err);
       }
     };
 
-    if (isFocused) {
-      fetchUserData();
-    }
+    if (isFocused) fetchUserData();
   }, [isFocused]);
 
   const handlePickImage = async () => {
@@ -73,102 +80,111 @@ export default function ProfileScreen({ navigation }: Props) {
   };
 
   const handleLogout = () => {
-    signOut(auth).catch((err) => Alert.alert('Lỗi đăng xuất', err.message));
+    signOut(auth)
+      .then(() => navigation.replace('SignIn'))
+      .catch((err) => Alert.alert('Lỗi đăng xuất', err.message));
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Quay lại */}
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.navigate('Home')}>
-        <Ionicons name="arrow-back" size={24} color="#333" />
-      </TouchableOpacity>
+      <Text style={styles.title}>Profile</Text>
 
-      {/* Avatar */}
       <TouchableOpacity onPress={handlePickImage}>
         <Image
-          source={{ uri: imageUri || 'https://i.pravatar.cc/150' }}
+          source={imageUri ? { uri: imageUri } : require('../../../assets/images/OIP1.jpg')}
           style={styles.avatar}
         />
       </TouchableOpacity>
 
-      {/* Thông tin người dùng */}
-      <Text style={styles.name}>
-        {userData?.name || 'Guest User'}
-      </Text>
-      <Text style={styles.email}>{user?.email}</Text>
-      <Text style={styles.country}>{userData?.country || ''}</Text>
+      <Text style={styles.name}>{userData?.fullName || 'Người dùng'}</Text>
+      <Text style={styles.username}>{user?.email}</Text>
 
-      {/* Các nút */}
-      <View style={styles.section}>
-        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('EditProfile')}>
-          <Text style={styles.buttonText}>✏️ Cập nhật thông tin</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleResetPassword}>
-          <Text style={styles.buttonText}>🔑 Đổi mật khẩu</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('RentalHistory')}>
-          <Text style={styles.buttonText}>📖 Lịch sử thuê xe</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, { backgroundColor: '#eee' }]} onPress={handleLogout}>
-          <Text style={[styles.buttonText, { color: '#d00' }]}>🚪 Đăng xuất</Text>
-        </TouchableOpacity>
+      <View style={styles.list}>
+        <ListItem
+          icon="settings-outline"
+          label="Cập nhật thông tin"
+          onPress={() => navigation.navigate('EditProfile')}
+        />
+        <ListItem
+          icon="lock-closed-outline"
+          label="Đổi mật khẩu"
+          onPress={handleResetPassword}
+        />
+        <ListItem
+          icon="book-outline"
+          label="Lịch sử thuê xe"
+          onPress={() => navigation.navigate('RentalHistory', { userId: user?.uid })}
+        />
+        <ListItem
+          icon="log-out-outline"
+          label="Đăng xuất"
+          onPress={handleLogout}
+          isLogout
+        />
       </View>
     </ScrollView>
   );
 }
 
+function ListItem({
+  icon,
+  label,
+  onPress,
+  isLogout = false,
+}: {
+  icon: any;
+  label: string;
+  onPress: () => void;
+  isLogout?: boolean;
+}) {
+  return (
+    <TouchableOpacity style={styles.row} onPress={onPress}>
+      <View style={styles.rowLeft}>
+        <Ionicons name={icon} size={20} color={isLogout ? '#d00' : '#555'} />
+        <Text style={[styles.rowText, isLogout && { color: '#d00' }]}>{label}</Text>
+      </View>
+      <Feather name="chevron-right" size={20} color="#ccc" />
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
+    padding: 20,
+    paddingTop: 50,
     alignItems: 'center',
-    paddingTop: 40,
-    paddingBottom: 80,
-    backgroundColor: '#fff',
   },
-  backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    zIndex: 10,
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 10,
   },
   avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#ccc',
+    width: 100, height: 100, borderRadius: 50, marginBottom: 10,
   },
   name: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 18, fontWeight: 'bold',
   },
-  email: {
-    fontSize: 16,
-    color: '#666',
+  username: {
+    color: 'gray',
   },
-  country: {
-    fontSize: 16,
-    color: '#999',
-    marginBottom: 24,
+  editBtn: {
+    backgroundColor: '#007bff', padding: 10, borderRadius: 5, marginTop: 10,
   },
-  section: {
-    width: '90%',
-    marginTop: 20,
+  editBtnText: {
+    color: '#fff',
   },
-  button: {
-    backgroundColor: '#007bff11',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderColor: '#007bff55',
-    borderWidth: 1,
+  list: {
+    marginTop: 30, width: '100%',
   },
-  buttonText: {
-    color: '#007bff',
-    fontSize: 16,
-    textAlign: 'center',
+  row: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 15, borderBottomWidth: 1, borderColor: '#eee',
+  },
+  rowLeft: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  rowText: {
+    marginLeft: 10, fontSize: 16,
   },
 });

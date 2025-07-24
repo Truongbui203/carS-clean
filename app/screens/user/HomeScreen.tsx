@@ -17,6 +17,8 @@ import { db } from '../../services/firebase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
+import { useUser } from '../../contexts/UserContext';
+
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -27,25 +29,60 @@ export default function HomeScreen() {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [cars, setCars] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const { uid } = useUser();
+
 
   useEffect(() => {
-    const fetchCars = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, 'cars'));
-        const carData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setCars(carData);
-      } catch (error) {
-        console.error('Lỗi lấy dữ liệu xe từ Firestore:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchCars = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'cars'));
+      const carData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
 
-    fetchCars();
-  }, []);
+      // Lấy tất cả rating
+      const ratingSnap = await getDocs(collection(db, 'reviews'));
+      const reviews = ratingSnap.docs.map(doc => doc.data());
+
+      // Tính rating trung bình cho từng car
+      const ratingsMap: Record<string, number> = {};
+      const countMap: Record<string, number> = {};
+
+      reviews.forEach((review: any) => {
+        const { carId, rating } = review;
+        if (rating && carId) {
+          ratingsMap[carId] = (ratingsMap[carId] || 0) + rating;
+          countMap[carId] = (countMap[carId] || 0) + 1;
+        }
+      });
+
+      const carsWithRating = carData.map(car => {
+        const total = ratingsMap[car.id] || 0;
+        const count = countMap[car.id] || 0;
+        const avgRating = count > 0 ? (total / count).toFixed(1) : '';
+        return { ...car, rating: avgRating };
+      });
+      const topRatedCars = [...cars]
+  .filter(car => typeof car.rating === 'number')
+  .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+  .slice(0, 5); // Hiển thị tối đa 5 xe rating cao nhất
+
+
+      setCars(carsWithRating);
+    } catch (error) {
+      console.error('Lỗi lấy dữ liệu xe hoặc đánh giá:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchCars();
+}, []);
+const topRatedCars = cars
+    .filter(car => typeof car.rating === 'number')
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 5);
 
   const filteredCars = cars.filter((car) => {
     return (
@@ -172,38 +209,66 @@ export default function HomeScreen() {
       </View>
 
       <FlatList
-        data={filteredCars}
+        data={[...filteredCars].sort((a, b) => (parseFloat(b.rating || 0) - parseFloat(a.rating || 0)))}
+
         keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
-          <View style={styles.carCard}>
-            <Image
-  source={
-    item.image
-      ? { uri: item.image }
-      : require('../../../assets/images/OIP1.jpg') // dùng ảnh mặc định nếu không có
-  }
-  style={styles.carImage}
-  resizeMode="cover"
-/>
+  <TouchableOpacity
+    onPress={() => {
+      navigation.navigate('CarDetail', { carId: item.id });
+    }}
+    activeOpacity={0.8}
+    style={styles.carCard}
+  >
+    <Image
+      source={
+        item.image
+          ? { uri: item.image }
+          : require('../../../assets/images/OIP1.jpg')
+      }
+      style={styles.carImage}
+      resizeMode="cover"
+    />
 
-            <Text style={styles.carName}>{item.name}</Text>
-            <Text style={styles.rating}>⭐ {item.rating || '5.0'}</Text>
-            <Text style={styles.location}>
-  {item.location && typeof item.location === 'object'
-    ? `Lat: ${item.location.latitude}, Lng: ${item.location.longitude}`
-    : 'Không rõ vị trí'}
-</Text>
+    <Text style={styles.carName}>{item.name}</Text>
 
-            <TouchableOpacity
-              style={styles.detailBtn}
-              onPress={() => navigation.navigate('CarDetail', { carId: item.id })}
-            >
-              <Text style={{ color: '#fff' }}>Details</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+    <View style={styles.ratingRow}>
+  <Text style={styles.ratingValue}>{item.rating || ''}</Text>
+  {item.rating ? (
+    <Ionicons name="star" size={14} color="#FFA500" style={{ marginLeft: 4 }} />
+  ) : null}
+</View>
+
+
+    <View style={styles.infoRow}>
+      <Ionicons name="location-outline" size={14} color="#888" />
+      <Text style={styles.locationText}>
+        {item.rental || 'Không rõ vị trí'}
+      </Text>
+    </View>
+
+    <View style={styles.bottomInfoRow}>
+      <View style={styles.iconText}>
+        <Ionicons name="person-outline" size={14} color="#888" />
+        <Text style={styles.metaText}>{item.ownerName || 'Không rõ'}</Text>
+      </View>
+      <View style={styles.iconText}>
+        <Ionicons name="call-outline" size={14} color="#888" />
+        <Text style={styles.metaText}>{item.phone || 'Không có'}</Text>
+      </View>
+    </View>
+
+    <View style={styles.priceWrapper}>
+      <Ionicons name="cash-outline" size={14} color="#888" />
+      <Text style={styles.priceText}>
+        ${item.price?.toLocaleString() || '0'}/Day
+      </Text>
+    </View>
+  </TouchableOpacity>
+)}
+
         contentContainerStyle={{ paddingBottom: 20 }}
       />
 
@@ -283,8 +348,7 @@ const styles = StyleSheet.create({
   icon: { marginRight: 6 },
   input: { flex: 1, height: 40 },
   sectionTitle: { fontSize: 20, fontWeight: '600', marginLeft: 20 },
-  
-  // 👇 Đổi tên lại, không trùng
+
   brandLogoCircle: {
     width: 40,
     height: 40,
@@ -393,6 +457,65 @@ reasonText: {
   marginTop: 5,
   fontSize: 12,
   textAlign: 'center',
+},
+carMeta: {
+  fontSize: 13,
+  color: '#666',
+},
+carPrice: {
+  fontSize: 14,
+  fontWeight: 'bold',
+  color: '#000',
+},
+ownerName: {
+  fontSize: 13,
+  color: '#333',
+  marginTop: 2,
+},
+phone: {
+  fontSize: 13,
+  color: '#007AFF',
+},
+ratingRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 2,
+},
+ratingValue: {
+  fontSize: 13,
+  color: '#444',
+},
+infoRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 4,
+},
+
+bottomInfoRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  marginTop: 4,
+  marginBottom: 4,
+},
+iconText: {
+  flexDirection: 'row',
+  alignItems: 'center',
+},
+metaText: {
+  marginLeft: 4,
+  fontSize: 13,
+  color: '#555',
+},
+priceWrapper: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginTop: 2,
+},
+priceText: {
+  marginLeft: 4,
+  fontSize: 13,
+  fontWeight: 'bold',
+  color: '#000',
 },
 
 });

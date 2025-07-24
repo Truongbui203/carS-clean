@@ -1,91 +1,106 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView } from 'react-native';
-import { signOut } from 'firebase/auth';
-import { auth } from '../../services/firebase';
-import { useNavigation } from '@react-navigation/native';
-import { DrawerNavigationProp } from '@react-navigation/drawer';
-import { AdminDrawerParamList } from '../../types/navigation';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { BarChart } from 'react-native-chart-kit';
+import { format, subDays, isSameDay } from 'date-fns';
 
 export default function AdminHomeScreen() {
-  const navigation = useNavigation<DrawerNavigationProp<AdminDrawerParamList>>();
+  const [dailyCounts, setDailyCounts] = useState<number[]>([]);
+  const [labels, setLabels] = useState<string[]>([]);
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error: any) {
-      Alert.alert('Logout Error', error.message);
-    }
-  };
+  useEffect(() => {
+    const fetchOrders = async () => {
+      const snapshot = await getDocs(collection(db, 'rentals'));
+      const now = new Date();
+      const last7Days: Date[] = [];
+
+      // Lấy 7 ngày gần nhất
+      for (let i = 6; i >= 0; i--) {
+        last7Days.push(subDays(now, i));
+      }
+
+      // Lấy mảng ngày thuê từ rentDate (kiểu string)
+      const rentalDates = snapshot.docs
+        .map(doc => {
+          const dateStr = doc.data().rentDate;
+          try {
+            return dateStr ? new Date(dateStr) : null;
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean) as Date[];
+
+      // Đếm số đơn mỗi ngày
+      const counts = last7Days.map(day =>
+        rentalDates.filter(r => isSameDay(r, day)).length
+      );
+
+      setLabels(last7Days.map(d => format(d, 'dd/MM')));
+      setDailyCounts(counts);
+    };
+
+    fetchOrders();
+  }, []);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>🔐 Admin Dashboard</Text>
-      <Text style={styles.subtitle}>Bạn có toàn quyền quản lý hệ thống</Text>
-
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('AddBrand')}>
-        <Text style={styles.buttonText}>➕ Thêm Hãng Xe</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('AddCar')}>
-        <Text style={styles.buttonText}>🚗 Thêm Xe Mới</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('UserList')}>
-        <Text style={styles.buttonText}>👤 Danh Sách Người Dùng</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('CarList')}>
-        <Text style={styles.buttonText}>🚘 Danh sách xe</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={[styles.button, styles.logoutButton]} onPress={handleLogout}>
-        <Text style={styles.logoutText}>🔓 Đăng Xuất</Text>
-      </TouchableOpacity>
-    </ScrollView>
+  <View style={styles.chartCard}>
+    <Text style={styles.chartTitle}>📈 Đơn đặt xe 7 ngày gần nhất</Text>
+    <BarChart
+      data={{
+        labels: labels,
+        datasets: [{ data: dailyCounts }],
+      }}
+      width={Dimensions.get('window').width - 48}
+      height={260}
+      fromZero
+      showValuesOnTopOfBars
+      yAxisLabel=""
+      yAxisSuffix=" đơn"
+      chartConfig={{
+        backgroundColor: '#fff',
+        backgroundGradientFrom: '#fff',
+        backgroundGradientTo: '#fff',
+        decimalPlaces: 0,
+        color: (opacity = 1) => `rgba(0, 122, 255, ${opacity})`,
+        labelColor: (opacity = 1) => `rgba(51, 51, 51, ${opacity})`,
+        barPercentage: 0.5,
+        propsForLabels: { fontSize: 13 },
+        propsForBackgroundLines: { strokeDasharray: '', stroke: '#e6e6e6' },
+      }}
+      style={styles.chart}
+    />
+  </View>
+</ScrollView>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
-    padding: 24,
-    backgroundColor: '#fff',
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f2f4f7',
+    minHeight: '100%',
   },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+  chartCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3, // Android shadow
+    marginBottom: 20,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  button: {
-    backgroundColor: '#007bff',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 10,
-    marginBottom: 16,
-    width: '100%',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 17,
+  chartTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#007AFF',
     textAlign: 'center',
+    marginBottom: 10,
   },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '600',
-    textAlign: 'center',
+  chart: {
+    borderRadius: 8,
   },
 });
