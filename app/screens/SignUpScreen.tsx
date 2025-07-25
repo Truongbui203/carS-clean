@@ -8,8 +8,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types/navigation';
 
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore'; // 👈 Thêm Firestore
-import { auth, db } from '../services/firebase';  // 👈 Export Firestore từ firebase.ts
+import { doc, setDoc } from 'firebase/firestore'; 
+import { auth, db } from '../services/firebase';  
 
 export default function SignUpScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -43,10 +43,10 @@ export default function SignUpScreen() {
         createdAt: new Date().toISOString(),
       });
 
-      Alert.alert('Success', 'Account created and saved to Firestore!');
+      Alert.alert('Success', 'Account created !');
       navigation.reset({
   index: 0,
-  routes: [{ name: 'Home' }],
+  routes: [{ name: 'UserStack' }],
 });
 
     } catch (error: any) {

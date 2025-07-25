@@ -72,8 +72,9 @@ export default function RentalHistoryScreen() {
 
   const renderItem = ({ item }: { item: any }) => {
     const startDate = item.rentDate ? new Date(item.rentDate) : null;
+    const isValidStartDate = startDate && !isNaN(startDate.getTime());
     const endDate =
-      startDate && item.duration
+      isValidStartDate && item.duration
         ? new Date(startDate.getTime() + (item.duration - 1) * 24 * 60 * 60 * 1000)
         : null;
 
@@ -96,7 +97,7 @@ export default function RentalHistoryScreen() {
             <Text style={styles.name}>{item.carName ?? 'Không rõ tên xe'}</Text>
             <Text>
               Ngày thuê:{' '}
-              {startDate ? startDate.toLocaleDateString() : 'Không rõ'}
+              {isValidStartDate ? startDate.toLocaleDateString() : 'Không rõ'}
             </Text>
             <Text>
               Ngày kết thúc:{' '}
@@ -113,7 +114,16 @@ export default function RentalHistoryScreen() {
   return (
     <View style={{ flex: 1, padding: 16 }}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigationRef.goBack()}>
+       <TouchableOpacity
+  onPress={() => {
+    if (navigationRef.canGoBack()) {
+      navigationRef.goBack();
+    } else {
+      navigationRef.navigate('Home'); // hoặc 'Home' nếu bạn có định nghĩa màn cụ thể
+    }
+  }}
+>
+
           <Ionicons name="arrow-back" size={24} color="black" />
         </TouchableOpacity>
         <Text style={styles.title}>Lịch sử thuê xe</Text>

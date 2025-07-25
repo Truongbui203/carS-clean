@@ -18,7 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types/navigation';
 import { useUser } from '../../contexts/UserContext';
-
+import * as Location from 'expo-location';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
@@ -30,9 +30,60 @@ export default function HomeScreen() {
   const [cars, setCars] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { uid } = useUser();
+  const DEFAULT_LOCATION = { latitude: 10.9804, longitude: 106.6519 };
+const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION);
+const [nearCars, setNearCars] = useState<any[]>([]);
+const [nearbyCars, setNearbyCars] = useState<any[]>([]);
+const [brandMap, setBrandMap] = useState<Record<string, string>>({});
 
 
-  useEffect(() => {
+
+
+ function getDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Bán kính trái đất (km)
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+useEffect(() => {
+  const fetchBrands = async () => {
+    const snapshot = await getDocs(collection(db, 'brands'));
+    const map: Record<string, string> = {};
+    snapshot.forEach(doc => {
+      map[doc.id] = doc.data().name?.trim() || '';
+    });
+    setBrandMap(map);
+  };
+  fetchBrands();
+}, []);
+
+
+// 1. Lấy vị trí người dùng (mặc định Thủ Dầu Một nếu không được cấp quyền)
+useEffect(() => {
+  (async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status === 'granted') {
+      const location = await Location.getCurrentPositionAsync({});
+      setUserLocation({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+    } else {
+      console.warn("Không được cấp quyền vị trí, dùng vị trí mặc định");
+      setUserLocation(DEFAULT_LOCATION);
+    }
+  })();
+}, []);
+
+// 2. Lấy danh sách xe và tính điểm rating
+useEffect(() => {
   const fetchCars = async () => {
     try {
       const snapshot = await getDocs(collection(db, 'cars'));
@@ -41,11 +92,9 @@ export default function HomeScreen() {
         ...doc.data(),
       }));
 
-      // Lấy tất cả rating
       const ratingSnap = await getDocs(collection(db, 'reviews'));
       const reviews = ratingSnap.docs.map(doc => doc.data());
 
-      // Tính rating trung bình cho từng car
       const ratingsMap: Record<string, number> = {};
       const countMap: Record<string, number> = {};
 
@@ -63,46 +112,82 @@ export default function HomeScreen() {
         const avgRating = count > 0 ? (total / count).toFixed(1) : '';
         return { ...car, rating: avgRating };
       });
-      const topRatedCars = [...cars]
-  .filter(car => typeof car.rating === 'number')
-  .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
-  .slice(0, 5); // Hiển thị tối đa 5 xe rating cao nhất
-
-
       setCars(carsWithRating);
+      const nearby = carsWithRating.filter((car: any) => {
+  if (
+    car.location &&
+    typeof car.location === 'object' &&
+    car.location.latitude &&
+    car.location.longitude
+  ) {
+    const distance = getDistanceKm(
+      userLocation.latitude,
+      userLocation.longitude,
+      car.location.latitude,
+      car.location.longitude
+    );
+    return distance <= 10;
+  }
+  return false;
+});
+setNearbyCars(nearby);
+
     } catch (error) {
       console.error('Lỗi lấy dữ liệu xe hoặc đánh giá:', error);
     } finally {
       setLoading(false);
     }
   };
+  const filteredNearCars = cars.filter(car => {
+  if (
+    car.location &&
+    typeof car.location === 'object' &&
+    car.location.latitude &&
+    car.location.longitude
+  ) {
+    const distance = getDistanceKm(
+      userLocation.latitude,
+      userLocation.longitude,
+      car.location.latitude,
+      car.location.longitude
+    );
+    return distance <= 10;
+  }
+  return false;
+});
+setNearCars(filteredNearCars);
+
+
 
   fetchCars();
 }, []);
-const topRatedCars = cars
+
+  const topRatedCars = [...cars]
     .filter(car => typeof car.rating === 'number')
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, 5);
 
   const filteredCars = cars.filter((car) => {
-    return (
-      (!selectedBrand || car.brand?.toLowerCase() === selectedBrand.toLowerCase()) &&
-      (!selectedCategory || car.category?.toLowerCase() === selectedCategory.toLowerCase()) &&
-      (!searchTerm || car.name?.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  });
+  const brandName = brandMap[car.brand]?.trim().toLowerCase();
+  const categoryName = car.category?.trim().toLowerCase();
+  const carName = car.name?.trim().toLowerCase();
+
+  return (
+    (!selectedBrand || brandName === selectedBrand.trim().toLowerCase()) &&
+    (!selectedCategory || categoryName === selectedCategory.trim().toLowerCase()) &&
+    (!searchTerm || carName.includes(searchTerm.trim().toLowerCase()))
+  );
+});
+
 
   if (loading) return <ActivityIndicator size="large" color="#000" style={{ marginTop: 50 }} />;
 
   return (
     <ScrollView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.logo}>Qent</Text>
-        
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={20} color="#999" style={styles.icon} />
         <TextInput
@@ -114,7 +199,6 @@ const topRatedCars = cars
         <Ionicons name="filter" size={20} color="#999" />
       </View>
 
-      {/* Brands */}
       <Text style={styles.sectionTitle}>Brands</Text>
       <FlatList
         data={[
@@ -133,11 +217,7 @@ const topRatedCars = cars
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() => {
-              if (selectedBrand === item.name) {
-                setSelectedBrand(null);
-              } else {
-                setSelectedBrand(item.name);
-              }
+              setSelectedBrand(selectedBrand === item.name ? null : item.name);
             }}
             style={styles.brandItem}
           >
@@ -162,7 +242,6 @@ const topRatedCars = cars
         contentContainerStyle={{ paddingVertical: 10 }}
       />
 
-      {/* Categories */}
       <FlatList
         data={[
           { id: 'sedan', label: 'Sedan' },
@@ -176,11 +255,7 @@ const topRatedCars = cars
         renderItem={({ item }) => (
           <TouchableOpacity
             onPress={() => {
-              if (selectedCategory === item.id) {
-                setSelectedCategory(null);
-              } else {
-                setSelectedCategory(item.id);
-              }
+              setSelectedCategory(selectedCategory === item.id ? null : item.id);
             }}
             style={[
               styles.categoryItem,
@@ -200,113 +275,157 @@ const topRatedCars = cars
         contentContainerStyle={{ paddingBottom: 10 }}
       />
 
-      {/* Car List */}
       <View style={styles.row}>
-        <Text style={styles.sectionTitle}>Best Cars</Text>
-        <TouchableOpacity>
-          <Text style={styles.viewAll}>View All</Text>
-        </TouchableOpacity>
-      </View>
+  <Text style={styles.sectionLabel}>Best Cars</Text>
+  <TouchableOpacity>
+    <Text style={styles.viewAll}>View All</Text>
+  </TouchableOpacity>
+</View>
+
 
       <FlatList
-        data={[...filteredCars].sort((a, b) => (parseFloat(b.rating || 0) - parseFloat(a.rating || 0)))}
-
+        data={[...filteredCars].sort((a, b) => parseFloat(b.rating || 0) - parseFloat(a.rating || 0))}
         keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
-  <TouchableOpacity
-    onPress={() => {
-      navigation.navigate('CarDetail', { carId: item.id });
+          <TouchableOpacity
+            onPress={() => {
+              navigation.navigate('CarDetail', { carId: item.id });
+            }}
+            activeOpacity={0.8}
+            style={styles.carCard}
+          >
+            <Image
+              source={
+                item.image
+                  ? { uri: item.image }
+                  : require('../../../assets/images/OIP1.jpg')
+              }
+              style={styles.carImage}
+              resizeMode="cover"
+            />
+
+            <Text style={styles.carName}>{item.name}</Text>
+
+            <View style={styles.ratingRow}>
+              <Text style={styles.ratingValue}>{item.rating || ''}</Text>
+              {item.rating ? (
+                <Ionicons name="star" size={14} color="#FFA500" style={{ marginLeft: 4 }} />
+              ) : null}
+            </View>
+
+            <View style={styles.infoRow}>
+              
+             <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+  <Ionicons name="location-outline" size={14} color="#888" />
+  {item.rental?.trim() || 'Không rõ vị trí'}
+</Text>
+            </View>
+
+            <View style={styles.bottomInfoRow}>
+              <View style={styles.iconText}>
+                <Ionicons name="person-outline" size={14} color="#888" />
+                <Text style={styles.metaText}>{item.ownerName || ''}</Text>
+              </View>
+              <View style={styles.iconText}>
+                <Ionicons name="call-outline" size={14} color="#888" />
+                <Text style={styles.metaText}>{item.phone || ''}</Text>
+              </View>
+            </View>
+
+            <View style={styles.priceWrapper}>
+              <Ionicons name="cash-outline" size={14} color="#888" />
+              <Text style={styles.priceText}>
+                ${item.price?.toLocaleString() || '0'}/Day
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      />
+    <View style={{ marginTop: 0, paddingHorizontal: 20 }}>
+
+        
+      </View>
+<View style={{ paddingHorizontal: 20 }}>
+  {/* Tiêu đề Nearby */}
+  <View style={{
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  }}>
+    <Text style={styles.sectionLabel}>Nearby</Text>
+    <TouchableOpacity>
+      <Text style={styles.viewAll}>View All</Text>
+    </TouchableOpacity>
+  </View>
+
+  {/* Danh sách Nearby */}
+  <FlatList
+    data={nearbyCars}
+    horizontal
+    keyExtractor={(item) => item.id}
+    showsHorizontalScrollIndicator={false}
+    snapToInterval={296} // width (280) + margin (16)
+    decelerationRate="fast"
+    renderItem={({ item }) => (
+      <TouchableOpacity
+        onPress={() => navigation.navigate('CarDetail', { carId: item.id })}
+        style={{
+          width: 280,
+          borderRadius: 12,
+          overflow: 'hidden',
+          backgroundColor: '#fff',
+          marginRight: 16,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          elevation: 3,
+        }}
+      >
+        <Image
+          source={{ uri: item.image }}
+          style={{ width: '100%', height: 160 }}
+          resizeMode="cover"
+        />
+        <View style={{ padding: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600' }} numberOfLines={1}>{item.name}</Text>
+
+          <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+           <Ionicons name="location-outline" size={14} color="#888" />
+<Text style={{ color: '#666', fontSize: 12 }}>
+  {item.rental || 'Không rõ vị trí'}
+</Text>
+
+          </Text>
+
+          {item.seats && (
+            <Text style={{ fontSize: 13, color: '#666', marginTop: 4 }}>
+              <Ionicons name="car-outline" size={14} color="#888" /> {item.seats} chỗ
+            </Text>
+          )}
+
+          <Text style={{ fontSize: 14, fontWeight: 'bold', marginTop: 4 }}>
+            {Number(item.price).toLocaleString('vi-VN')}₫/ngày
+          </Text>
+        </View>
+      </TouchableOpacity>
+    )}
+    contentContainerStyle={{
+      paddingRight: 20,
+      paddingBottom: 20,
     }}
-    activeOpacity={0.8}
-    style={styles.carCard}
-  >
-    <Image
-      source={
-        item.image
-          ? { uri: item.image }
-          : require('../../../assets/images/OIP1.jpg')
-      }
-      style={styles.carImage}
-      resizeMode="cover"
-    />
-
-    <Text style={styles.carName}>{item.name}</Text>
-
-    <View style={styles.ratingRow}>
-  <Text style={styles.ratingValue}>{item.rating || ''}</Text>
-  {item.rating ? (
-    <Ionicons name="star" size={14} color="#FFA500" style={{ marginLeft: 4 }} />
-  ) : null}
+  />
 </View>
 
 
-    <View style={styles.infoRow}>
-      <Ionicons name="location-outline" size={14} color="#888" />
-      <Text style={styles.locationText}>
-        {item.rental || 'Không rõ vị trí'}
-      </Text>
-    </View>
-
-    <View style={styles.bottomInfoRow}>
-      <View style={styles.iconText}>
-        <Ionicons name="person-outline" size={14} color="#888" />
-        <Text style={styles.metaText}>{item.ownerName || 'Không rõ'}</Text>
-      </View>
-      <View style={styles.iconText}>
-        <Ionicons name="call-outline" size={14} color="#888" />
-        <Text style={styles.metaText}>{item.phone || 'Không có'}</Text>
-      </View>
-    </View>
-
-    <View style={styles.priceWrapper}>
-      <Ionicons name="cash-outline" size={14} color="#888" />
-      <Text style={styles.priceText}>
-        ${item.price?.toLocaleString() || '0'}/Day
-      </Text>
-    </View>
-  </TouchableOpacity>
-)}
-
-        contentContainerStyle={{ paddingBottom: 20 }}
-      />
-
-      {/* Ưu đãi đặc biệt */}
-      <View style={styles.promoCard}>
+      
+       <View style={styles.promoCard}>
         <Text style={styles.promoTitle}>🎉 Ưu đãi tháng 7</Text>
         <Text style={styles.promoText}>Giảm ngay 10% cho lần thuê đầu tiên!</Text>
-      </View>
-
-      {/* Top địa điểm */}
-      <View style={{ marginHorizontal: 20, marginTop: 30 }}>
-        <Text style={styles.sectionTitle}>Top địa điểm</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-          {['Hà Nội', 'TP.HCM', 'Đà Nẵng', 'Bình Dương', 'Cần Thơ'].map((city) => (
-            <TouchableOpacity key={city} style={styles.locationTag}>
-              <Text style={styles.locationText}>{city}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* Lý do chọn chúng tôi */}
-      <View style={styles.reasonContainer}>
-        <Text style={styles.sectionTitle}>Tại sao chọn Qent?</Text>
-        <View style={styles.reasonList}>
-          <View style={styles.reasonItem}>
-            <Ionicons name="car-sport" size={24} color="#007AFF" />
-            <Text style={styles.reasonText}>100+ xe mới</Text>
-          </View>
-          <View style={styles.reasonItem}>
-            <Ionicons name="time" size={24} color="#007AFF" />
-            <Text style={styles.reasonText}>Giao xe đúng giờ</Text>
-          </View>
-          <View style={styles.reasonItem}>
-            <Ionicons name="shield-checkmark" size={24} color="#007AFF" />
-            <Text style={styles.reasonText}>Bảo hiểm đầy đủ</Text>
-          </View>
-        </View>
       </View>
     </ScrollView>
   );
@@ -516,6 +635,33 @@ priceText: {
   fontSize: 13,
   fontWeight: 'bold',
   color: '#000',
+},
+nearbyCard: {
+  width: 300,
+  backgroundColor: '#fff',
+  borderRadius: 16,
+  marginRight: 16,
+  marginVertical: 10, // ← thêm dòng này
+  overflow: 'hidden',
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 3,
+},
+sectionLabel: {
+  fontSize: 18,
+  fontWeight: '600',
+  color: '#222',
+  marginBottom: 8,
+},
+
+
+nearbyImage: {
+  width: '100%',
+  height: 160,
+  borderTopLeftRadius: 16,
+  borderTopRightRadius: 16,
 },
 
 });

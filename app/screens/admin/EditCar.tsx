@@ -20,6 +20,7 @@ export default function EditCarScreen() {
   const navigation = useNavigation();
   const route = useRoute<EditCarRouteProp>();
   const { carId } = route.params;
+const [ownerName, setOwnerName] = useState('');
 
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
@@ -41,6 +42,8 @@ export default function EditCarScreen() {
         setLocation(data.location || '');
         setPhone(data.phone || '');
         setImage(data.image || '');
+        setOwnerName(data.ownerName || '');
+
       } else {
         Alert.alert('Không tìm thấy xe');
         navigation.goBack();
@@ -64,6 +67,7 @@ export default function EditCarScreen() {
         location,
         phone,
         image,
+          ownerName, 
       });
 
       Alert.alert('Thành công', 'Cập nhật thông tin xe thành công!', [
@@ -94,6 +98,13 @@ export default function EditCarScreen() {
         value={name}
         onChangeText={setName}
       />
+      <TextInput
+  style={styles.input}
+  placeholder="Tên chủ xe"
+  value={ownerName}
+  onChangeText={setOwnerName}
+/>
+
       <TextInput
         style={styles.input}
         placeholder="Hãng xe"

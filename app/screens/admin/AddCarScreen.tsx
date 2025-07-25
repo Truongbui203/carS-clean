@@ -9,6 +9,9 @@ import { addDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { onSnapshot } from 'firebase/firestore';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+
 
 type BrandItem = {
   label: string;
@@ -22,9 +25,10 @@ type CategoryItem = {
 };
 
 const DEFAULT_LOCATION = {
-  latitude: 10.762622,
-  longitude: 106.660172,
+  latitude: 11.0535,
+  longitude: 106.7010,
 };
+
 
 const AddCarScreen = () => {
   const [name, setName] = useState('');
@@ -33,11 +37,47 @@ const AddCarScreen = () => {
   const [price, setPrice] = useState('');
   const [location, setLocation] = useState(DEFAULT_LOCATION);
   const [image, setImage] = useState<string | null>(null);
-
+  const [address, setAddress] = useState('');
   const [brandOptions, setBrandOptions] = useState<BrandItem[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<CategoryItem[]>([]);
   const [openBrand, setOpenBrand] = useState(false);
   const [openCategory, setOpenCategory] = useState(false);
+const geocodeAddress = async () => {
+  if (!address.trim()) {
+    Alert.alert('Vui lòng nhập địa chỉ');
+    return;
+  }
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'MyCarApp/1.0 (test@example.com)',
+      },
+    });
+
+    if (!res.ok) {
+      console.error('Fetch error:', res.status, res.statusText);
+      Alert.alert('Lỗi khi tìm vị trí', `HTTP ${res.status} – ${res.statusText}`);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.length > 0) {
+      const lat = parseFloat(data[0].lat);
+      const lon = parseFloat(data[0].lon);
+      setLocation({ latitude: lat, longitude: lon });
+      Alert.alert('✅ Đã xác định vị trí');
+    } else {
+      Alert.alert('Không tìm thấy địa chỉ');
+    }
+  } catch (error: any) {
+    console.error('Exception khi fetch vị trí:', error);
+    Alert.alert('Lỗi khi tìm vị trí', error.message);
+  }
+};
+
+
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -63,7 +103,6 @@ const AddCarScreen = () => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Không được cấp quyền định vị', 'Đang dùng vị trí mặc định (TP.HCM)');
         return;
       }
       try {
@@ -73,7 +112,7 @@ const AddCarScreen = () => {
           longitude: loc.coords.longitude,
         });
       } catch (err) {
-        Alert.alert('Lỗi định vị', 'Đang dùng vị trí mặc định (TP.HCM)');
+        Alert.alert('Lỗi định vị', 'Đang dùng vị trí mặc định (TP.TDM)')
         setLocation(DEFAULT_LOCATION);
       }
     })();
@@ -109,17 +148,24 @@ const AddCarScreen = () => {
     }
 
     try {
-      await addDoc(collection(db, 'cars'), {
-        name,
-        brand,
-        category: category || null,
-        price: Number(price),
-        location,
-        image,
-        createdAt: new Date(),
-      });
+ await addDoc(collection(db, 'cars'), {
+  name,
+  brand,
+  category: category || null,
+  price: Number(price),
+  location: {
+    latitude: location.latitude,
+    longitude: location.longitude,
+  },
+  rental: address || null,
+  image,
+  createdAt: new Date(),
+});
 
-      Alert.alert('✅ Thành công', 'Xe đã được thêm');
+
+
+
+      Alert.alert(' Thành công', 'Xe đã được thêm');
       setName('');
       setBrand(null);
       setCategory(null);
@@ -164,7 +210,7 @@ const AddCarScreen = () => {
             placeholder="Chọn hãng xe"
             style={styles.dropdown}
             dropDownContainerStyle={styles.dropdownContainer}
-            listMode="SCROLLVIEW"
+            listMode="MODAL"
             zIndex={3000}
             zIndexInverse={1000}
           />
@@ -194,6 +240,17 @@ const AddCarScreen = () => {
           keyboardType="numeric"
           style={styles.input}
         />
+        <TextInput
+  placeholder="Nhập địa chỉ "
+  value={address}
+  onChangeText={setAddress}
+  style={styles.input}
+/>
+
+<TouchableOpacity onPress={geocodeAddress} style={styles.button}>
+  <Text style={styles.buttonText}> Tìm </Text>
+</TouchableOpacity>
+
 
         <MapView
           style={styles.map}
@@ -213,7 +270,7 @@ const AddCarScreen = () => {
         </MapView>
 
         <Text style={styles.debugText}>
-           Vị trí: {location.latitude}, {location.longitude}
+          1 Vị trí: {location.latitude}, {location.longitude}
         </Text>
 
         <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>

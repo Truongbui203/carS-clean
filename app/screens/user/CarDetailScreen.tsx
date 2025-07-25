@@ -41,7 +41,7 @@ export default function CarDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<CarDetailRouteProp>();
   const { carId } = route.params;
-
+  const [reviewList, setReviewList] = useState<{ userName: string, content: string, rating: number }[]>([]);
   const [car, setCar] = useState<Car | null>(null);
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState<Date>(new Date());
@@ -96,7 +96,10 @@ export default function CarDetailScreen() {
       }
     };
 
-    fetchRating();
+    fetchRating(
+      
+    );
+    
   }, [carId]);
 
   const isCarAvailable = async (
@@ -203,22 +206,35 @@ export default function CarDetailScreen() {
           ))}
           <Text style={{ marginLeft: 6 }}>{averageRating.toFixed(1)}</Text>
         </View>
+        <View style={{ marginBottom: 12 }}>
+  <View style={styles.infoRow}>
+  <Ionicons name="person-outline" size={16} color="#555" style={styles.infoIcon} />
+  <Text style={styles.infoText}>{(car as any).ownerName || 'Không rõ chủ xe'}</Text>
+</View>
+<View style={styles.infoRow}>
+  <Ionicons name="call-outline" size={16} color="#555" style={styles.infoIcon} />
+  <Text style={styles.infoText}>{(car as any).phone || 'Chưa có số'}</Text>
+</View>
+
+</View>
+
 
         {/* Thông số */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-          <View style={{ alignItems: 'center' }}>
-            <Ionicons name="speedometer" size={24} color="#007AFF" />
-            <Text>90L</Text>
-          </View>
-          <View style={{ alignItems: 'center' }}>
-            <Ionicons name="cog" size={24} color="#007AFF" />
-            <Text>Manual</Text>
-          </View>
-          <View style={{ alignItems: 'center' }}>
-            <Ionicons name="people" size={24} color="#007AFF" />
-            <Text>2 People</Text>
-          </View>
-        </View>
+        <View style={styles.specsRow}>
+  <View style={styles.specItem}>
+    <Ionicons name="speedometer" size={24} color="#007AFF" />
+    <Text style={styles.specText}>90L</Text>
+  </View>
+  <View style={styles.specItem}>
+    <Ionicons name="cog" size={24} color="#007AFF" />
+    <Text style={styles.specText}>Manual</Text>
+  </View>
+  <View style={styles.specItem}>
+    <Ionicons name="people" size={24} color="#007AFF" />
+    <Text style={styles.specText}>2 chỗ</Text>
+  </View>
+</View>
+
 
         {/* Ngày thuê */}
         <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>Ngày bắt đầu thuê:</Text>
@@ -390,4 +406,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+   infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  infoIcon: {
+    marginRight: 8,
+    width: 20,
+    textAlign: 'center',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#555',
+    flexShrink: 1,
+    },
+    specItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+ 
+  
 });

@@ -3,24 +3,36 @@ import {
   View,
   Text,
   FlatList,
-  ActivityIndicator,
   Image,
-  StyleSheet,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
-import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { collection, getDocs, doc, deleteDoc } from 'firebase/firestore';
 import { db } from '../../services/firebase';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../types/navigation';
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+import { NavigationProp } from '@react-navigation/native';
 
 const CarListScreen = () => {
   const [cars, setCars] = useState<any[]>([]);
+  const [brands, setBrands] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(true);
-  const navigation = useNavigation<NavigationProp>();
+  const navigation = useNavigation<NavigationProp<any>>();
+
+  const fetchBrands = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, 'brands'));
+      const brandMap: { [key: string]: string } = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        brandMap[doc.id] = data.name;
+      });
+      setBrands(brandMap);
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách hãng:', error);
+    }
+  };
 
   const fetchCars = async () => {
     try {
@@ -37,34 +49,30 @@ const CarListScreen = () => {
     }
   };
 
-  // Tự động reload dữ liệu mỗi khi màn hình được focus
   useFocusEffect(
     useCallback(() => {
+      fetchBrands();
       fetchCars();
     }, [])
   );
 
   const confirmDelete = (carId: string) => {
-    Alert.alert(
-      'Xác nhận',
-      'Bạn có chắc muốn xóa xe này?',
-      [
-        { text: 'Hủy', style: 'cancel' },
-        {
-          text: 'Xóa',
-          onPress: async () => {
-            try {
-              await deleteDoc(doc(db, 'cars', carId));
-              Alert.alert('✅ Thành công', 'Xe đã được xóa');
-              fetchCars();
-            } catch (error) {
-              Alert.alert('❌ Lỗi', 'Không thể xóa xe');
-            }
-          },
-          style: 'destructive',
+    Alert.alert('Xác nhận', 'Bạn có chắc muốn xóa xe này?', [
+      { text: 'Hủy', style: 'cancel' },
+      {
+        text: 'Xóa',
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'cars', carId));
+            Alert.alert('Thành công', 'Xe đã được xóa');
+            fetchCars();
+          } catch (error) {
+            Alert.alert('Lỗi', 'Không thể xóa xe');
+          }
         },
-      ]
-    );
+        style: 'destructive',
+      },
+    ]);
   };
 
   if (loading) {
@@ -79,23 +87,16 @@ const CarListScreen = () => {
       renderItem={({ item }) => (
         <View style={styles.card}>
           {item.image ? (
-            <Image
-              source={{ uri: item.image }}
-              style={styles.image}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: item.image }} style={styles.image} resizeMode="cover" />
           ) : (
             <Text style={styles.noImage}>Không có hình ảnh</Text>
           )}
           <Text style={styles.title}>Tên xe: {item.name}</Text>
-          <Text>Hãng: {item.brand}</Text>
+          <Text>Hãng: {brands[item.brand] || 'Không xác định'}</Text>
           <Text>Giá: {item.price}</Text>
           <Text>Loại: {item.category || 'Không có'}</Text>
-          {item.location && typeof item.location === 'object' ? (
-            <Text>Vị trí: {item.location.latitude}, {item.location.longitude}</Text>
-          ) : (
-            <Text>Vị trí: Không xác định</Text>
-          )}
+         <Text>Vị trí: {item.rental || 'Không xác định'}</Text>
+
           <Text>Liên hệ: {item.phone || 'Chưa có'}</Text>
 
           <View style={styles.actions}>
