@@ -23,5 +23,5 @@ export const storage = getStorage(app);
 export async function getUserInfo(uid: string) {
   const ref = doc(db, 'users', uid);
   const snapshot = await getDoc(ref);
-  return snapshot.exists() ? snapshot.data() : null;
+  return snapshot.exists() ? snapshot.data() : null; 
 }

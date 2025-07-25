@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
-  Image, Alert, Platform, KeyboardAvoidingView, ScrollView
+  Image, Alert, Platform, ScrollView
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import DropDownPicker from 'react-native-dropdown-picker';
@@ -16,81 +16,31 @@ type BrandItem = {
   categories?: string[];
 };
 
-type CategoryItem = {
-  label: string;
-  value: string;
-};
-
-const DEFAULT_LOCATION = {
-  latitude: 10.762622,
-  longitude: 106.660172,
-};
-
 const AddCarScreen = () => {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState<string | null>(null);
   const [category, setCategory] = useState<string | null>(null);
   const [price, setPrice] = useState('');
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
+  const [location, setLocation] = useState({ latitude: 10.762622, longitude: 106.660172 });
   const [image, setImage] = useState<string | null>(null);
 
   const [brandOptions, setBrandOptions] = useState<BrandItem[]>([]);
-  const [categoryOptions, setCategoryOptions] = useState<CategoryItem[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<any[]>([]); // Cập nhật kiểu category
   const [openBrand, setOpenBrand] = useState(false);
   const [openCategory, setOpenCategory] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
       const querySnapshot = await getDocs(collection(db, 'brands'));
-      const options: BrandItem[] = querySnapshot.docs
-        .map((doc): BrandItem | null => {
-          const data = doc.data();
-          const name = data.name?.trim();
-          if (!name) return null;
-          return {
-            label: name,
-            value: doc.id,
-            categories: Array.isArray(data.categories) ? data.categories : [],
-          };
-        })
-        .filter((item): item is BrandItem => item !== null);
+      const options: BrandItem[] = querySnapshot.docs.map((doc) => ({
+        label: doc.data().name,
+        value: doc.id,
+        categories: doc.data().categories || [],
+      }));
       setBrandOptions(options);
     };
     fetchBrands();
   }, []);
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Không được cấp quyền định vị', 'Đang dùng vị trí mặc định (TP.HCM)');
-        return;
-      }
-      try {
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        });
-      } catch (err) {
-        Alert.alert('Lỗi định vị', 'Đang dùng vị trí mặc định (TP.HCM)');
-        setLocation(DEFAULT_LOCATION);
-      }
-    })();
-  }, []);
-
-  const onBrandChange = (value: string | null) => {
-    setBrand(value);
-    const selected = brandOptions.find((b) => b.value === value);
-    if (selected?.categories?.length) {
-      setCategoryOptions(
-        selected.categories.map((c) => ({ label: c, value: c }))
-      );
-    } else {
-      setCategoryOptions([]);
-    }
-    setCategory(null);
-  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -125,114 +75,93 @@ const AddCarScreen = () => {
       setCategory(null);
       setCategoryOptions([]);
       setPrice('');
-      setLocation(DEFAULT_LOCATION);
+      setLocation({ latitude: 10.762622, longitude: 106.660172 });
       setImage(null);
     } catch (error: any) {
-      Alert.alert(' Lỗi', error.message);
+      Alert.alert('Lỗi', error.message);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+    <ScrollView
       style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      nestedScrollEnabled={true} // Đảm bảo khả năng cuộn khi có nhiều nội dung
     >
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        nestedScrollEnabled={true}
+      <TouchableOpacity onPress={handleAddCar} style={styles.button}>
+        <Text style={styles.buttonText}>Lưu Xe</Text>
+      </TouchableOpacity>
+      
+      <TextInput
+        placeholder="Tên xe"
+        value={name}
+        onChangeText={setName}
+        style={styles.input}
+      />
+
+      {/* Dropdown cho hãng xe */}
+      <DropDownPicker
+        open={openBrand}
+        value={brand}
+        items={brandOptions}
+        setOpen={setOpenBrand}
+        setValue={setBrand}
+        setItems={setBrandOptions}
+        onChangeValue={(value) => {
+          setBrand(value);
+          const selectedBrand = brandOptions.find((item) => item.value === value);
+          setCategoryOptions(selectedBrand?.categories || []);
+          setCategory(null);
+        }}
+        placeholder="Chọn hãng xe"
+        style={styles.dropdown}
+      />
+
+      {/* Dropdown cho loại xe */}
+      <DropDownPicker
+        open={openCategory}
+        value={category}
+        items={categoryOptions.map((cat) => ({ label: cat, value: cat }))}
+        setOpen={setOpenCategory}
+        setValue={setCategory}
+        setItems={setCategoryOptions}
+        placeholder="Chọn loại xe"
+        style={styles.dropdown}
+      />
+
+      <TextInput
+        placeholder="Giá thuê"
+        value={price}
+        onChangeText={setPrice}
+        keyboardType="numeric"
+        style={styles.input}
+      />
+
+      <MapView
+        style={styles.map}
+        region={{
+          latitude: location.latitude,
+          longitude: location.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+        onPress={(e) => setLocation(e.nativeEvent.coordinate)}
       >
-        <Text style={styles.title}>➕ Thêm Xe Mới</Text>
+        <Marker coordinate={location} draggable onDragEnd={(e) => setLocation(e.nativeEvent.coordinate)} />
+      </MapView>
 
-        <TextInput
-          placeholder="Tên xe"
-          value={name}
-          onChangeText={setName}
-          style={styles.input}
-        />
+      <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
+        {image ? (
+          <Image source={{ uri: image }} style={styles.image} />
+        ) : (
+          <Text style={styles.imageText}>Chọn ảnh xe</Text>
+        )}
+      </TouchableOpacity>
 
-        <View style={{ zIndex: 3000 }}>
-          <DropDownPicker
-            open={openBrand}
-            value={brand}
-            items={brandOptions}
-            setOpen={setOpenBrand}
-            setValue={setBrand}
-            setItems={setBrandOptions}
-            onChangeValue={onBrandChange}
-            placeholder="Chọn hãng xe"
-            style={styles.dropdown}
-            dropDownContainerStyle={styles.dropdownContainer}
-            listMode="SCROLLVIEW"
-            zIndex={3000}
-            zIndexInverse={1000}
-          />
-        </View>
-
-        <View style={{ zIndex: 2000 }}>
-          <DropDownPicker
-            open={openCategory}
-            value={category}
-            items={categoryOptions}
-            setOpen={setOpenCategory}
-            setValue={setCategory}
-            setItems={setCategoryOptions}
-            placeholder="Chọn loại xe (tùy chọn)"
-            style={styles.dropdown}
-            dropDownContainerStyle={styles.dropdownContainer}
-            listMode="SCROLLVIEW"
-            zIndex={2000}
-            zIndexInverse={1000}
-          />
-        </View>
-
-        <TextInput
-          placeholder="Giá thuê (VD: 1000000)"
-          value={price}
-          onChangeText={setPrice}
-          keyboardType="numeric"
-          style={styles.input}
-        />
-
-        <MapView
-          style={styles.map}
-          region={{
-            latitude: location.latitude,
-            longitude: location.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          onPress={(e) => setLocation(e.nativeEvent.coordinate)}
-        >
-          <Marker
-            coordinate={location}
-            draggable
-            onDragEnd={(e) => setLocation(e.nativeEvent.coordinate)}
-          />
-        </MapView>
-
-        <Text style={styles.debugText}>
-           Vị trí: {location.latitude}, {location.longitude}
-        </Text>
-
-        <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.image} />
-          ) : (
-            <Text style={styles.imageText}>Chọn ảnh xe</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={handleAddCar} style={styles.button}>
-          <Text style={styles.buttonText}>Lưu Xe</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </ScrollView>
   );
 };
-
-export default AddCarScreen;
 
 const styles = StyleSheet.create({
   container: {
@@ -257,20 +186,10 @@ const styles = StyleSheet.create({
     borderColor: '#ccc',
     marginBottom: 16,
   },
-  dropdownContainer: {
-    borderColor: '#ccc',
-    borderWidth: 1,
-    backgroundColor: '#fff',
-  },
   map: {
     width: '100%',
     height: 200,
     borderRadius: 8,
-    marginBottom: 12,
-  },
-  debugText: {
-    textAlign: 'center',
-    color: '#666',
     marginBottom: 12,
   },
   imagePicker: {
@@ -301,3 +220,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default AddCarScreen;

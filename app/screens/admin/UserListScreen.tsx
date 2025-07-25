@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   StyleSheet,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
@@ -58,9 +59,18 @@ export default function UserListScreen() {
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
         <TouchableOpacity onPress={() => handlePressUser(item)} style={styles.userItem}>
-          <Text style={styles.name}>{item.fullName}</Text>
-          <Text style={styles.email}>{item.email}</Text>
-          <Text style={styles.role}>{item.role}</Text>
+          <View style={styles.userInfo}>
+            {/* Placeholder for user image */}
+            <Image
+              source={{ uri: item.profileImage || 'https://placeimg.com/100/100/people' }} // Placeholder image
+              style={styles.userImage}
+            />
+            <View style={styles.userDetails}>
+              <Text style={styles.name}>{item.fullName}</Text>
+              <Text style={styles.email}>{item.email}</Text>
+              <Text style={styles.role}>{item.role}</Text>
+            </View>
+          </View>
         </TouchableOpacity>
       )}
       contentContainerStyle={{ padding: 16 }}
@@ -75,19 +85,36 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   userItem: {
-    backgroundColor: '#f3f3f3',
+    backgroundColor: '#fff',
     padding: 16,
     marginBottom: 12,
-    borderRadius: 8,
+    borderRadius: 10,
+    elevation: 3,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  userImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 16,
+  },
+  userDetails: {
+    flex: 1,
   },
   name: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 18,
+    color: '#333',
   },
   email: {
     color: '#555',
+    fontSize: 14,
   },
   role: {
     color: '#888',
+    fontSize: 14,
   },
 });

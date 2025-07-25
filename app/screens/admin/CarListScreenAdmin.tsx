@@ -54,11 +54,14 @@ const CarListScreen = () => {
           text: 'Xóa',
           onPress: async () => {
             try {
+              setLoading(true); // Bật loading khi xóa xe
               await deleteDoc(doc(db, 'cars', carId));
               Alert.alert('✅ Thành công', 'Xe đã được xóa');
               fetchCars();
             } catch (error) {
               Alert.alert('❌ Lỗi', 'Không thể xóa xe');
+            } finally {
+              setLoading(false); // Tắt loading sau khi xóa
             }
           },
           style: 'destructive',
